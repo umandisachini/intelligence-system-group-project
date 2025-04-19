@@ -24,28 +24,29 @@ nltk.download('punkt_tab')
 nltk.download('stopwords')
 
 
-df = pd.read_csv("news_sample3.csv")  
+df = pd.read_csv("news_sample3.csv") #Read the file and load to data frame 
 
 
-dfs1 = df.dropna(subset=['type']).reset_index(drop=True)
-stp_wds = set(stopwords.words('english'))
+dfs1 = df.dropna(subset=['type']).reset_index(drop=True)# This removes the rows where 'type' is missing and assigns to dfs1
+stp_wds = set(stopwords.words('english'))# This remove the stopwords such as article and pronouns
+stemmer = PorterStemmer()   # To convert the words to their basic form
 stemmer = PorterStemmer()
 
 def TokanizeOnly(text):
-    if not isinstance(text, str):
+    if not isinstance(text, str):#check weather the input is string
         return []
-    tokens = word_tokenize(text.lower())
-    return [word for word in tokens if word.isalpha()]
+    tokens = word_tokenize(text.lower())#convert all charactors to lower case
+    return [word for word in tokens if word.isalpha()] #remove numbers, symbols and keep only words
 
-dfs1['OnlyTokans'] = dfs1['content'].apply(TokanizeOnly)
+dfs1['OnlyTokans'] = dfs1['content'].apply(TokanizeOnly)# Create new column 'OnlyTokans'
 dfs1['no_stopwords'] = dfs1['OnlyTokans'].apply(
     lambda tokens: [word for word in tokens if word not in stp_wds]
 )
 dfs1['stemd'] = dfs1['no_stopwords'].apply(
-    lambda tokens: [stemmer.stem(word) for word in tokens]
-)
+    lambda tokens: [stemmer.stem(word) for word in tokens]  #Remove stop words
+)#apply stemming to tokans
 
-
+# Frequency plot (Top N words)
 processed_vocab = Counter([word for tokens in dfs1['stemd'] for word in tokens])
 tp_wds = min(10000, len(processed_vocab))
 TopWords = processed_vocab.most_common(tp_wds)
@@ -59,12 +60,13 @@ if TopWords:
     plt.ylabel("Frequency")
     plt.show()
 
-
+#  Count URLs, dates, and numbers
 dfs1['url_count'] = dfs1['content'].str.count(r'http[s]?://\S+')
 DatePtn = r'\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}[/-]\d{1,2}[/-]\d{1,2}|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+\d{4})\b'
 dfs1['date_count'] = dfs1['content'].str.count(DatePtn, flags=re.IGNORECASE)
 dfs1['number_count'] = dfs1['content'].str.count(r'\d+')
 
+# Removal of URLs and numbers from content
 def remove_urls_and_numbers(text):
     if not isinstance(text, str):
         return ""
@@ -74,6 +76,7 @@ def remove_urls_and_numbers(text):
 
 dfs1['content_cleaned'] = dfs1['content'].apply(remove_urls_and_numbers)
 
+# Final token processing on cleaned content
 def process_text(text):
     if not isinstance(text, str):
         return []
@@ -81,12 +84,15 @@ def process_text(text):
     tokens = [token for token in tokens if token.isalpha() and token not in stp_wds]
     return [stemmer.stem(token) for token in tokens]
 
+# count the number of rows became empty after processing
 empty_token_count = dfs1['content'].apply(lambda x: len(x) == 0).sum()
 print(f"Number of rows with empty tokens: {empty_token_count}")
 
+# Show most common words (top 20)
 processed_vocab = Counter([token for tokens in dfs1['content'] for token in tokens])
 print("Top 20 tokens:", processed_vocab.most_common(20))
 
+# visualization of bar chart
 if processed_vocab:
     words, fqs = zip(*processed_vocab.most_common(100))
     plt.figure(figsize=(15, 5))
@@ -98,16 +104,19 @@ if processed_vocab:
 
 
 df = dfs1.copy()
-df = df[df['type'].notnull()]
+# Use the 'type' field as label source, clean it
+df = df[df['type'].notnull()]# drop rows with no label
 df['label_binary'] = df['type'].apply(
     lambda x: 'reliable' if str(x).strip().lower() in ['reliable', 'political'] else 'fake'
 )
+# Check class balance
 print(df['label_binary'].value_counts())
 
-
+# Train/Val/Test Split (80/10/10)
 train_df, temp_df = train_test_split(df, test_size=0.2, stratify=df['label_binary'], random_state=42)
 val_df, test_df = train_test_split(temp_df, test_size=0.5, stratify=temp_df['label_binary'], random_state=42)
 
+# Feature extraction from 'content'
 Vect = TfidfVectorizer(stop_words='english', max_features=5000)
 XTrain = Vect.fit_transform(train_df['content'].fillna(""))
 XValue = Vect.transform(val_df['content'].fillna(""))
@@ -117,6 +126,7 @@ YTrain = train_df['label_binary']
 YValue = val_df['label_binary']
 YTest = test_df['label_binary']
 
+# Create a function "ModelEval" to evaluate a model
 def ModelEval(name, model, XValue, YValue, XTest, YTest):
     print(f"\n{name} Performance:")
     for split_name, X, y in [("Validation", XValue, YValue), ("Test", XTest, YTest)]:
@@ -132,16 +142,17 @@ def ModelEval(name, model, XValue, YValue, XTest, YTest):
         print(f"F1 Score:  {f1:.4f}")
 
 
+# Naive Bayes model
 NavModl = MultinomialNB()
 NavModl.fit(XTrain, YTrain)
 ModelEval("Naive Bayes", NavModl, XValue, YValue, XTest, YTest)
 
-
+#  Logistic Regression model with class weights
 LogMdl = LogisticRegression(class_weight='balanced', max_iter=1000)
 LogMdl.fit(XTrain, YTrain)
 ModelEval("Logistic Regression", LogMdl, XValue, YValue, XTest, YTest)
 
-
+#Advance Model
 df_bert = pd.read_csv("news_sample3.csv")  
 
 df_bert = df_bert[df_bert['inserted_at'].notnull() & df_bert['content'].notnull()]
