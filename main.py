@@ -46,7 +46,7 @@ dfs1['stemd'] = dfs1['no_stopwords'].apply(
     lambda tokens: [stemmer.stem(word) for word in tokens]  #Remove stop words
 )#apply stemming to tokans
 
-# Frequency plot (Top N words)
+# Frequency of Top 10000 words vs Word Rank
 processed_vocab = Counter([word for tokens in dfs1['stemd'] for word in tokens])
 tp_wds = min(10000, len(processed_vocab))
 TopWords = processed_vocab.most_common(tp_wds)
@@ -92,16 +92,23 @@ print(f"Number of rows with empty tokens: {empty_token_count}")
 processed_vocab = Counter([token for tokens in dfs1['content'] for token in tokens])
 print("Top 20 tokens:", processed_vocab.most_common(20))
 
-# visualization of bar chart
-if processed_vocab:
-    words, fqs = zip(*processed_vocab.most_common(100))
+# frequency of top 100 word vs words
+processed_vocab = Counter([word for tokens in dfs1['stemd'] for word in tokens])
+tp_wds = min(100, len(processed_vocab))  # Limit for visibility
+TopWords = processed_vocab.most_common(tp_wds)
+
+if TopWords:
+    words, fqs = zip(*TopWords)
     plt.figure(figsize=(15, 5))
     plt.bar(words, fqs)
-    plt.title("Top 100 Word Frequencies")
-    plt.xticks(rotation=90)
+    plt.title(f"Frequency of Top {tp_wds} Words")
+    plt.xlabel("Words")
+    plt.ylabel("Frequency")
+    plt.xticks(rotation=90, ha='right')
     plt.tight_layout()
     plt.show()
-
+else:
+    print("Not enough data for frequency plot.")
 
 df = dfs1.copy()
 # Use the 'type' field as label source, clean it
